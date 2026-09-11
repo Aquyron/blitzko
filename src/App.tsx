@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import ChampionLookup from "./components/ChampionLookup";
 import TierList from "./components/TierList";
 import ChampSelectAssist from "./components/ChampSelectAssist";
+import UpdateBanner from "./components/UpdateBanner";
 import { loadChampionIdIndex } from "./lib/ddragon";
 import "./App.css";
 
@@ -78,6 +79,7 @@ function App() {
   return (
     <main className="app">
       <div className="app-stack">
+      <UpdateBanner />
       {champSelect.active && !champSelect.myChampionLocked ? (
         <ChampSelectAssist
           myPosition={champSelect.myPosition}

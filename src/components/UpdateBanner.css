@@ -1,0 +1,32 @@
+.update-banner {
+  width: 960px;
+  max-width: 94vw;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  background: linear-gradient(180deg, var(--bg-panel) 0%, var(--bg-panel-2) 100%);
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.update-banner-btn {
+  background: linear-gradient(180deg, var(--accent) 0%, var(--accent-2) 100%);
+  border: none;
+  color: #0a0b10;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  padding: 7px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.update-banner-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
