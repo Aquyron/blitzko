@@ -1,0 +1,79 @@
+.tierlist {
+  width: 880px;
+  max-width: 94vw;
+}
+
+.tierlist-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.tierlist-note {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  margin: 0 0 14px;
+}
+
+.tierlist-table {
+  position: relative;
+  background: linear-gradient(180deg, var(--bg-panel) 0%, var(--bg-panel-2) 100%);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 8px 12px;
+  box-shadow: 0 12px 32px #00000060;
+  overflow: hidden;
+  max-height: 520px;
+  overflow-y: auto;
+}
+
+.tierlist-row {
+  display: grid;
+  grid-template-columns: 32px 1fr 56px 72px 72px 72px 64px;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.tierlist-header {
+  position: sticky;
+  top: 0;
+  background: var(--bg-panel);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  z-index: 1;
+}
+
+.tierlist-rank {
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
+.tierlist-champ {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.icon-tierlist {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.tierlist-grade {
+  font-weight: 800;
+  font-size: 13px;
+}
