@@ -41,6 +41,13 @@ body {
   gap: 16px;
 }
 
+.app-logo {
+  height: 56px;
+  width: auto;
+  border-radius: 12px;
+  filter: drop-shadow(0 4px 16px #5b8cff40);
+}
+
 .card {
   width: 320px;
   position: relative;

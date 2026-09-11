@@ -62,11 +62,6 @@ export default function TierList() {
         <RolePicker options={POSITIONS} value={position} onChange={setPosition} />
         {loading && <span className="stat loading-indicator">Loading...</span>}
       </div>
-      <p className="tierlist-note">
-        Sorted by OP.GG tier (S to D) &middot; OP.GG's meta tool has no rank filter, so this is
-        their overall aggregate, not a specific rank tier.
-      </p>
-
       {error && <p className="error-text">{error}</p>}
 
       {ddragon && entries.length > 0 && (

@@ -6,6 +6,7 @@ import TierList from "./components/TierList";
 import ChampSelectAssist from "./components/ChampSelectAssist";
 import UpdateBanner from "./components/UpdateBanner";
 import { loadChampionIdIndex } from "./lib/ddragon";
+import logo from "./assets/blitzko-logo.png";
 import "./App.css";
 
 type GameflowState = { phase: string };
@@ -79,6 +80,7 @@ function App() {
   return (
     <main className="app">
       <div className="app-stack">
+      <img src={logo} alt="Blitzko" className="app-logo" />
       <UpdateBanner />
       {champSelect.active && !champSelect.myChampionLocked ? (
         <ChampSelectAssist
