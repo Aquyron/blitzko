@@ -13,6 +13,7 @@ use super::cache::Cache;
 const CHAMPION_ANALYSIS_TTL: Duration = Duration::from_secs(20 * 60);
 const LANE_META_TTL: Duration = Duration::from_secs(20 * 60);
 const ARAM_AUGMENTS_TTL: Duration = Duration::from_secs(20 * 60);
+const SUMMONER_PROFILE_TTL: Duration = Duration::from_secs(20 * 60);
 
 /// Fields requested from `lol_get_champion_analysis`, matching the "closed
 /// set" the tool documents via `tools/list`. Keep this in sync with that
@@ -185,6 +186,41 @@ impl OpggDataService {
             .call_tool("lol_list_aram_augments", args)
             .await?;
         self.cache.set(key, value.clone(), ARAM_AUGMENTS_TTL).await;
+        Ok(value)
+    }
+
+    /// Ranked tier/division/LP for one summoner — used to show an enemy's
+    /// rank once a live game has revealed their Riot ID (never available
+    /// during champ select, which is deliberate on Riot's part).
+    pub async fn summoner_profile(
+        &self,
+        game_name: &str,
+        tag_line: &str,
+        region: &str,
+    ) -> Result<Value, OpggError> {
+        let key = format!("summoner_profile:{region}:{game_name}#{tag_line}");
+        if let Some(cached) = self.cache.get(&key).await {
+            return Ok(cached);
+        }
+
+        let args = serde_json::json!({
+            "game_name": game_name,
+            "tag_line": tag_line,
+            "region": region,
+            "desired_output_fields": [
+                "data.summoner.league_stats[].game_type",
+                "data.summoner.league_stats[].tier_info.tier",
+                "data.summoner.league_stats[].tier_info.division",
+                "data.summoner.league_stats[].tier_info.lp",
+                "data.summoner.league_stats[].win",
+                "data.summoner.league_stats[].lose",
+            ],
+        });
+        let value = self
+            .client
+            .call_tool("lol_get_summoner_profile", args)
+            .await?;
+        self.cache.set(key, value.clone(), SUMMONER_PROFILE_TTL).await;
         Ok(value)
     }
 }

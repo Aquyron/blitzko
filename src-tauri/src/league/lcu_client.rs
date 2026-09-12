@@ -114,6 +114,14 @@ impl LcuClient {
         self.get("/lol-summoner/v1/current-summoner").await
     }
 
+    /// The client's platform region (e.g. "NA1", "EUW1") — used to map to
+    /// OP.GG's shorter region codes ("NA", "EUW") for rank lookups.
+    /// **Unverified live** — path and field name are community-documented,
+    /// not officially published by Riot.
+    pub async fn region_locale(&self) -> Result<Value, reqwest::Error> {
+        self.get("/riotclient/region-locale").await
+    }
+
     pub async fn game_version(&self) -> Option<String> {
         self.get("/lol-patch/v1/game-version")
             .await

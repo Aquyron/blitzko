@@ -20,6 +20,8 @@ pub fn run() {
             commands::apply_item_set,
             commands::apply_summoner_spells,
             commands::submit_champ_select_action,
+            commands::get_live_game_enemies,
+            commands::get_enemy_rank,
             commands::get_champion_build,
             commands::get_champion_list,
             commands::get_lane_tier_list,

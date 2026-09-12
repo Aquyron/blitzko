@@ -1,6 +1,7 @@
 pub mod champ_select;
 pub mod item_set_apply;
 pub mod lcu_client;
+pub mod live_client;
 pub mod process_detector;
 pub mod rune_apply;
 pub mod types;

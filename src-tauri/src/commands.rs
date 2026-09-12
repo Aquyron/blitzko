@@ -1,6 +1,8 @@
+use serde::Serialize;
 use tauri::State;
 
 use crate::league::item_set_apply::{self, ItemBlock, ItemBlockInput, ItemSetSpec};
+use crate::league::live_client::{self, LiveClient};
 use crate::league::rune_apply::{self, RuneSpec};
 use crate::league::types::{ChampSelectState, GameflowState, LeagueStatus};
 use crate::state::AppState;
@@ -123,6 +125,61 @@ pub async fn submit_champ_select_action(
 
     client
         .set_champ_select_action(action_id, champion_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EnemyInfo {
+    pub champion_name: String,
+    pub game_name: String,
+    pub tag_line: String,
+}
+
+/// Reads the live game (only reachable once a match has actually loaded,
+/// per Riot's own design — never during champ select) and returns the
+/// enemy team's champions and Riot IDs.
+#[tauri::command]
+pub async fn get_live_game_enemies() -> Result<Vec<EnemyInfo>, String> {
+    let client = LiveClient::new();
+    let data = client.all_game_data().await.map_err(|e| e.to_string())?;
+    Ok(live_client::parse_enemies(&data)
+        .into_iter()
+        .map(|e| EnemyInfo {
+            champion_name: e.champion_name,
+            game_name: e.game_name,
+            tag_line: e.tag_line,
+        })
+        .collect())
+}
+
+#[tauri::command]
+pub async fn get_enemy_rank(
+    state: State<'_, AppState>,
+    game_name: String,
+    tag_line: String,
+) -> Result<serde_json::Value, String> {
+    let client = state
+        .current_client
+        .lock()
+        .unwrap()
+        .clone()
+        .ok_or_else(|| "League Client is not connected".to_string())?;
+
+    let region_raw = client
+        .region_locale()
+        .await
+        .map_err(|e| e.to_string())?;
+    let platform = region_raw
+        .get("region")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "Could not read region".to_string())?;
+    let region = live_client::normalize_region(platform);
+
+    state
+        .opgg
+        .summoner_profile(&game_name, &tag_line, &region)
         .await
         .map_err(|e| e.to_string())
 }

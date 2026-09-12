@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import ChampionLookup from "./components/ChampionLookup";
 import TierList from "./components/TierList";
 import ChampSelectAssist from "./components/ChampSelectAssist";
+import EnemyScout from "./components/EnemyScout";
 import UpdateBanner from "./components/UpdateBanner";
 import { loadChampionIdIndex } from "./lib/ddragon";
 import logo from "./assets/blitzko-logo.png";
@@ -94,6 +95,7 @@ function App() {
         />
       ) : (
         <>
+          {gameflow.phase === "InProgress" && <EnemyScout />}
           <div className="tab-switch">
             <button
               className={`tab-btn${tab === "build" ? " active" : ""}`}
