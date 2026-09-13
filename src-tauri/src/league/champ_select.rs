@@ -16,7 +16,7 @@
 
 use serde_json::Value;
 
-use super::types::ChampSelectState;
+use super::types::{ChampSelectState, TeamMemberInfo};
 
 pub fn parse_session(value: &Value) -> ChampSelectState {
     let local_cell_id = value.get("localPlayerCellId").and_then(|v| v.as_i64());
@@ -73,6 +73,33 @@ pub fn parse_session(value: &Value) -> ChampSelectState {
         })
         .unwrap_or_default();
 
+    let my_team_members = value
+        .get("myTeam")
+        .and_then(|v| v.as_array())
+        .map(|team| {
+            team.iter()
+                .filter_map(|p| {
+                    let summoner_id = p.get("summonerId").and_then(|v| v.as_i64())?;
+                    if summoner_id == 0 {
+                        // A bot, or a human whose summoner data hasn't
+                        // resolved yet.
+                        return None;
+                    }
+                    let position = p
+                        .get("assignedPosition")
+                        .and_then(|v| v.as_str())
+                        .filter(|s| !s.is_empty())
+                        .map(|s| s.to_uppercase())
+                        .unwrap_or_else(|| "NONE".to_string());
+                    Some(TeamMemberInfo {
+                        summoner_id,
+                        position,
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
     let (my_action_id, my_action_type) = local_cell_id
         .and_then(|cell_id| my_active_action(value, cell_id))
         .unzip();
@@ -95,6 +122,7 @@ pub fn parse_session(value: &Value) -> ChampSelectState {
         my_ban_pending,
         banned_champion_ids,
         my_team_champion_ids,
+        my_team_members,
     }
 }
 

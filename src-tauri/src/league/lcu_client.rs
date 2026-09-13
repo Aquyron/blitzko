@@ -122,6 +122,15 @@ impl LcuClient {
         self.get("/riotclient/region-locale").await
     }
 
+    /// Looks up a teammate's Riot ID by their internal `summonerId` —
+    /// unlike the enemy team, teammates' identity is *not* hidden during
+    /// champ select, so this is how we can show "My Team" ranks before the
+    /// live game even starts. **Unverified live**.
+    pub async fn summoner_by_id(&self, summoner_id: i64) -> Result<Value, reqwest::Error> {
+        self.get(&format!("/lol-summoner/v1/summoners/{summoner_id}"))
+            .await
+    }
+
     pub async fn game_version(&self) -> Option<String> {
         self.get("/lol-patch/v1/game-version")
             .await

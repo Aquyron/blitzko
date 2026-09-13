@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import ChampionLookup from "./components/ChampionLookup";
 import TierList from "./components/TierList";
 import ChampSelectAssist from "./components/ChampSelectAssist";
+import TeamRanks from "./components/TeamRanks";
 import EnemyScout from "./components/EnemyScout";
 import UpdateBanner from "./components/UpdateBanner";
 import { loadChampionIdIndex } from "./lib/ddragon";
@@ -24,6 +25,7 @@ type ChampSelectState = {
   myBanPending: boolean;
   bannedChampionIds: number[];
   myTeamChampionIds: number[];
+  myTeamMembers: { summonerId: number; position: string }[];
 };
 
 function App() {
@@ -40,6 +42,7 @@ function App() {
     myBanPending: false,
     bannedChampionIds: [],
     myTeamChampionIds: [],
+    myTeamMembers: [],
   });
   const [championIdMap, setChampionIdMap] = useState<Map<number, string> | null>(null);
   const [tab, setTab] = useState<"build" | "tierlist">("build");
@@ -84,18 +87,20 @@ function App() {
       <img src={logo} alt="Blitzko" className="app-logo" />
       <UpdateBanner />
       {champSelect.active && !champSelect.myChampionLocked ? (
-        <ChampSelectAssist
-          myPosition={champSelect.myPosition}
-          myActionId={champSelect.myActionId}
-          myActionType={champSelect.myActionType}
-          myBanPending={champSelect.myBanPending}
-          bannedChampionIds={champSelect.bannedChampionIds}
-          myTeamChampionIds={champSelect.myTeamChampionIds}
-          enemyChampionIds={champSelect.enemyChampionIds}
-        />
+        <>
+          <TeamRanks members={champSelect.myTeamMembers} />
+          <ChampSelectAssist
+            myPosition={champSelect.myPosition}
+            myActionId={champSelect.myActionId}
+            myActionType={champSelect.myActionType}
+            myBanPending={champSelect.myBanPending}
+            bannedChampionIds={champSelect.bannedChampionIds}
+            myTeamChampionIds={champSelect.myTeamChampionIds}
+            enemyChampionIds={champSelect.enemyChampionIds}
+          />
+        </>
       ) : (
         <>
-          {gameflow.phase === "InProgress" && <EnemyScout />}
           <div className="tab-switch">
             <button
               className={`tab-btn${tab === "build" ? " active" : ""}`}
@@ -120,6 +125,17 @@ function App() {
             />
           ) : (
             <TierList />
+          )}
+
+          {/* Both teams' Riot IDs only become readable once the game is
+              truly live (confirmed live — the feed doesn't respond during
+              "GameStart" either), so there's nothing to gain by hiding the
+              build tab while waiting for it — show everything together. */}
+          {(gameflow.phase === "GameStart" || gameflow.phase === "InProgress") && (
+            <>
+              <EnemyScout label="My Team" fetchCommand="get_live_game_allies" variant="ally" />
+              <EnemyScout label="Enemy Team" fetchCommand="get_live_game_enemies" variant="enemy" />
+            </>
           )}
         </>
       )}

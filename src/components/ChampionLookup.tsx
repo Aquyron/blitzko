@@ -19,6 +19,8 @@ import {
   winRate,
 } from "../lib/recommendation";
 import { CurrentAugment, loadCurrentAugments, rankIconUrl } from "../lib/riotAssets";
+import { supportItemFor } from "../lib/supportItems";
+import { hybridBuildFor } from "../lib/hybridBuilds";
 import { RolePicker } from "./RolePicker";
 import "./ChampionLookup.css";
 
@@ -38,6 +40,7 @@ const POSITION_LABELS: Record<string, string> = {
 // the result — confirmed live by comparing responses across positions.
 const LANE_MODES = new Set(["ranked", "flex"]);
 
+
 function RankBadgeIcon({ tier }: { tier: string }) {
   const url = rankIconUrl(tier);
   if (!url) {
@@ -52,7 +55,6 @@ const TIERS = [
   "silver",
   "gold",
   "platinum",
-  "emerald",
   "emerald_plus",
   "diamond",
   "master",
@@ -145,6 +147,11 @@ type Analysis = {
     skills?: { order?: string[] };
     strong_counters?: Counter[];
     weak_counters?: Counter[];
+    // Server-injected — only present when strong/weak counters come back
+    // empty because this champion+position+tier combo simply doesn't have
+    // enough matchup data yet (common at Master+ for less-played picks).
+    // Confirmed live (2026-09): shaped as {message}, not a plain string.
+    counters_meta?: { message?: string };
   };
 };
 
@@ -171,6 +178,56 @@ function ItemRow({ idx, group, label }: { idx: DdragonIndex; group?: ItemGroup; 
       <span className={`stat conf-${conf}`}>
         {wr.toFixed(1)}% &middot; {formatGames(games)} games
       </span>
+    </div>
+  );
+}
+
+// Same look as ItemRow, but for the manually curated hybrid-build override
+// (src/lib/hybridBuilds.ts) where we have no real play/win numbers to show.
+function ManualItemRow({
+  idx,
+  names,
+  label,
+}: {
+  idx: DdragonIndex;
+  names: string[];
+  label: string;
+}) {
+  if (!names.length) return null;
+  return (
+    <div className="build-row">
+      <span className="build-row-label">{label}</span>
+      <div className="icon-row">
+        {names.map((name, i) => {
+          const url = itemIconUrl(idx, name);
+          return url ? (
+            <img key={i} src={url} alt={name} title={name} className="icon icon-item" />
+          ) : (
+            <span key={i} className="icon-fallback" title={name}>
+              {name}
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function SupportItemRow({ idx, champion }: { idx: DdragonIndex; champion: string }) {
+  const pick = supportItemFor(champion);
+  if (!pick) return null;
+  const url = itemIconUrl(idx, pick.name);
+  return (
+    <div className="build-row">
+      <span className="build-row-label">SUPPORT ITEM</span>
+      <div className="icon-row">
+        {url ? (
+          <img src={url} alt={pick.name} title={pick.name} className="icon icon-item" />
+        ) : (
+          <span className="icon-fallback">{pick.name}</span>
+        )}
+        <span className="stat">{pick.name}</span>
+      </div>
     </div>
   );
 }
@@ -257,6 +314,31 @@ export default function ChampionLookup({
   const [champions, setChampions] = useState<string[]>([]);
   const [champion, setChampion] = useState("Ahri");
   const [position, setPosition] = useState("mid");
+  // Manually curated override for champions where OP.GG's own site shows
+  // two genuinely different, internally-coherent builds but their public
+  // API only reports one tier-wide aggregate that mixes both together (see
+  // src/lib/hybridBuilds.ts). Defaults to whichever style the hardcoded
+  // data lists first; only rendered when hybridBuild is non-null below.
+  const [manualStyle, setManualStyle] = useState<"ad" | "ap">("ap");
+  // Which physical key (D or F) gets the *first* summoner spell OP.GG lists
+  // — purely a personal keybind preference, so it's remembered across
+  // sessions rather than reset every time.
+  const [spellsSwapped, setSpellsSwapped] = useState(
+    () => localStorage.getItem("blitzko_spells_swapped") === "true"
+  );
+  function toggleSpellsSwapped() {
+    setSpellsSwapped((prev) => {
+      const next = !prev;
+      localStorage.setItem("blitzko_spells_swapped", String(next));
+      return next;
+    });
+  }
+  // The hardcoded build is jungle-specific (that's the only role we
+  // transcribed it for) — anyone playing Shaco elsewhere should still see
+  // OP.GG's real per-position stats instead of a jungle build slapped onto
+  // the wrong lane.
+  const hybridBuild = position === "jungle" ? hybridBuildFor(champion) : null;
+  const activeManualBuild = hybridBuild ? hybridBuild[manualStyle] : null;
   const [tier, setTier] = useState("emerald_plus");
   const [gameMode, setGameMode] = useState("ranked");
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
@@ -345,14 +427,17 @@ export default function ChampionLookup({
 
   // Auto-apply runes+spells once per live champ-select pick — never for
   // manual browsing (changing champion/tier/mode by hand never sets this).
-  // Debounced 1s on top: champ select hovering flicks through several
+  // Debounced 300ms on top: champ select hovering flicks through several
   // champions before locking one in, and we only want to push a client
-  // change once you actually rest on one, not on every fleeting hover.
+  // change once you actually rest on one, not on every fleeting hover. Was
+  // 1000ms — combined with the (now-removed) redundant duplicate fetch this
+  // made the client visibly lag behind the moment you actually settled on a
+  // champion.
   const autoApplyPendingRef = useRef(false);
   const lastAutoKeyRef = useRef<string | null>(null);
   const autoApplyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // `load` is recreated every render (closes over current champion/position);
-  // keep a ref pointed at the latest one so the 2s timeout below never fires
+  // keep a ref pointed at the latest one so the timeout below never fires
   // a stale closure from the render where it was scheduled.
   const loadRef = useRef<() => void>(() => {});
 
@@ -366,7 +451,7 @@ export default function ChampionLookup({
       lastAutoKeyRef.current = key;
       autoApplyPendingRef.current = true;
       loadRef.current();
-    }, 1000);
+    }, 300);
 
     return () => {
       if (autoApplyTimerRef.current) clearTimeout(autoApplyTimerRef.current);
@@ -383,9 +468,17 @@ export default function ChampionLookup({
 
   // Auto-load whenever the selection changes, instead of requiring a manual
   // click every time — a light debounce keeps quick dropdown flipping from
-  // firing a request per intermediate value.
+  // firing a request per intermediate value. Skipped for a champ-select-
+  // driven change (champion/position still match the live auto-detected
+  // values): the dedicated auto-apply effect below already loads that exact
+  // same build shortly after — firing both meant two redundant network
+  // round trips racing each other, which is what made runes/spells land in
+  // the client noticeably slower than they needed to.
   useEffect(() => {
     if (!ddragon) return;
+    const isAutoDriven =
+      autoChampion === champion && (!autoPosition || autoPosition === position);
+    if (isAutoDriven) return;
     const handle = setTimeout(() => {
       load();
     }, 250);
@@ -429,8 +522,9 @@ export default function ChampionLookup({
   async function applySpells(source?: Analysis) {
     const ids = (source ?? analysis)?.data?.summoner_spells?.ids;
     if (!ids || ids.length < 2) return;
+    const [first, second] = spellsSwapped ? [ids[1], ids[0]] : [ids[0], ids[1]];
     try {
-      await invoke("apply_summoner_spells", { spell1Id: ids[0], spell2Id: ids[1] });
+      await invoke("apply_summoner_spells", { spell1Id: first, spell2Id: second });
     } catch (e) {
       console.error("apply_summoner_spells failed", e);
     }
@@ -466,7 +560,15 @@ export default function ChampionLookup({
         .map((name) => ddragon.itemByName.get(name))
         .filter((id): id is string => Boolean(id));
 
+    const supportItemIds: string[] = [];
+    if (position === "support") {
+      const pick = supportItemFor(champion);
+      const id = pick && ddragon.itemByName.get(pick.name);
+      if (id) supportItemIds.push(id);
+    }
+
     const blocks = [
+      { blockType: "Support Item", itemIds: supportItemIds },
       { blockType: "Starting Items", itemIds: toItemIds(analysis.data?.starter_items) },
       { blockType: "Core Build", itemIds: toItemIds(analysis.data?.core_items) },
       { blockType: "Boots", itemIds: toItemIds(analysis.data?.boots) },
@@ -566,6 +668,28 @@ export default function ChampionLookup({
             ))}
           </div>
         </div>
+
+        {hybridBuild && (
+          <div className="controls-row">
+            <div className="build-style-toggle build-style-toggle-lg">
+              <button
+                type="button"
+                className={`build-style-toggle-btn ad${manualStyle === "ad" ? " active" : ""}`}
+                onClick={() => setManualStyle("ad")}
+              >
+                AD Build
+              </button>
+              <button
+                type="button"
+                className={`build-style-toggle-btn ap${manualStyle === "ap" ? " active" : ""}`}
+                onClick={() => setManualStyle("ap")}
+              >
+                AP Build
+              </button>
+            </div>
+          </div>
+        )}
+
       </div>
 
       {error && <p className="error-text">{error}</p>}
@@ -609,40 +733,94 @@ export default function ChampionLookup({
 
           <div className="lookup-body">
             <div className="lookup-col">
-              <ItemRow idx={ddragon} group={analysis.data?.starter_items} label="STARTING ITEMS" />
-              <ItemRow idx={ddragon} group={analysis.data?.core_items} label="CORE BUILD" />
-              <ItemRow idx={ddragon} group={analysis.data?.boots} label="BOOTS" />
-              <ItemOptionsRow idx={ddragon} groups={analysis.data?.fourth_items} label="4TH ITEM OPTIONS" />
-              <ItemOptionsRow idx={ddragon} groups={analysis.data?.fifth_items} label="5TH ITEM OPTIONS" />
-              <ItemOptionsRow idx={ddragon} groups={analysis.data?.sixth_items} label="6TH ITEM OPTIONS" />
+              {position === "support" && <SupportItemRow idx={ddragon} champion={champion} />}
+              {!activeManualBuild && (
+                <ItemRow idx={ddragon} group={analysis.data?.starter_items} label="STARTING ITEMS" />
+              )}
+              {activeManualBuild ? (
+                <>
+                  {activeManualBuild.jungleItem && (
+                    <ManualItemRow
+                      idx={ddragon}
+                      names={[activeManualBuild.jungleItem]}
+                      label="JUNGLE ITEM"
+                    />
+                  )}
+                  <ManualItemRow idx={ddragon} names={activeManualBuild.coreItems} label="CORE BUILD" />
+                  <ManualItemRow idx={ddragon} names={[activeManualBuild.boots]} label="BOOTS" />
+                  <ManualItemRow
+                    idx={ddragon}
+                    names={activeManualBuild.fourthOptions}
+                    label="4TH ITEM OPTIONS"
+                  />
+                  <ManualItemRow
+                    idx={ddragon}
+                    names={activeManualBuild.fifthOptions}
+                    label="5TH ITEM OPTIONS"
+                  />
+                  <ManualItemRow
+                    idx={ddragon}
+                    names={activeManualBuild.sixthOptions}
+                    label="6TH ITEM OPTIONS"
+                  />
+                </>
+              ) : (
+                <>
+                  <ItemRow idx={ddragon} group={analysis.data?.core_items} label="CORE BUILD" />
+                  <ItemRow idx={ddragon} group={analysis.data?.boots} label="BOOTS" />
+                  <ItemOptionsRow idx={ddragon} groups={analysis.data?.fourth_items} label="4TH ITEM OPTIONS" />
+                  <ItemOptionsRow idx={ddragon} groups={analysis.data?.fifth_items} label="5TH ITEM OPTIONS" />
+                  <ItemOptionsRow idx={ddragon} groups={analysis.data?.sixth_items} label="6TH ITEM OPTIONS" />
+                </>
+              )}
             </div>
 
             <div className="lookup-col">
-              {spells?.ids && (
-                <div className="build-row">
+              {spells?.ids && spells.ids.length >= 2 && (
+                <>
+                  <div className="spell-swap-row">
+                    <button
+                      type="button"
+                      className="spell-swap-btn"
+                      title="Swap which key (D/F) each spell goes on"
+                      onClick={toggleSpellsSwapped}
+                    >
+                      <span className="spell-swap-icon">⇄</span> Swap
+                    </button>
+                  </div>
+                  <div className="build-row">
                   <span className="build-row-label">SUMMONER SPELLS</span>
                   <div className="icon-row">
-                    {spells.ids.map((id, i) => {
-                      const url = spellIconUrl(ddragon, id);
-                      const name = spellName(ddragon, id);
-                      return url ? (
-                        <img key={i} src={url} alt={name} title={name} className="icon icon-spell" />
-                      ) : (
-                        <span key={i} className="icon-fallback">
-                          {name}
-                        </span>
-                      );
-                    })}
+                    {(spellsSwapped ? [spells.ids[1], spells.ids[0]] : [spells.ids[0], spells.ids[1]]).map(
+                      (id, i) => {
+                        const url = spellIconUrl(ddragon, id);
+                        const name = spellName(ddragon, id);
+                        return url ? (
+                          <img
+                            key={i}
+                            src={url}
+                            alt={name}
+                            title={name}
+                            className="icon icon-spell"
+                          />
+                        ) : (
+                          <span key={i} className="icon-fallback">
+                            {name}
+                          </span>
+                        );
+                      }
+                    )}
                   </div>
-                </div>
+                  </div>
+                </>
               )}
 
-              {runes && (
+              {activeManualBuild ? (
                 <div className="build-row">
                   <span className="build-row-label">RUNES</span>
                   <div className="rune-page">
                     <div className="rune-col rune-col-primary">
-                      {runes.primary_rune_names?.map((name, i) => {
+                      {activeManualBuild.runes.primaryRunes.map((name, i) => {
                         const url = runeIconUrl(ddragon, name);
                         return url ? (
                           <img
@@ -660,59 +838,107 @@ export default function ChampionLookup({
                       })}
                     </div>
                     <div className="rune-col rune-col-secondary">
-                      {runes.secondary_rune_names?.map((name, i) => {
+                      {activeManualBuild.runes.secondaryRunes.map((name, i) => {
                         const url = runeIconUrl(ddragon, name);
                         return url ? (
-                          <img
-                            key={i}
-                            src={url}
-                            alt={name}
-                            title={name}
-                            className="icon icon-rune"
-                          />
+                          <img key={i} src={url} alt={name} title={name} className="icon icon-rune" />
                         ) : (
                           <span key={i} className="icon-fallback">
                             {name}
                           </span>
                         );
                       })}
-                      {runes.stat_mod_names && runes.stat_mod_names.length > 0 && (
-                        <div className="rune-shards">
-                          {runes.stat_mod_names.map((id, i) => {
-                            const url = statModIconUrl(id);
-                            const name = statModName(id);
-                            return url ? (
-                              <img
-                                key={i}
-                                src={url}
-                                alt={name}
-                                title={name}
-                                className="icon icon-shard"
-                              />
-                            ) : (
-                              <span key={i} className="icon-fallback">
-                                {name}
-                              </span>
-                            );
-                          })}
-                        </div>
-                      )}
                     </div>
                   </div>
-                  <span className={`stat conf-${confidenceFor(runes.play ?? 0)}`}>
-                    {winRate(runes.win ?? 0, runes.play ?? 0).toFixed(1)}% &middot;{" "}
-                    {formatGames(runes.play ?? 0)} games
-                  </span>
                 </div>
+              ) : (
+                runes && (
+                  <div className="build-row">
+                    <span className="build-row-label">RUNES</span>
+                    <div className="rune-page">
+                      <div className="rune-col rune-col-primary">
+                        {runes.primary_rune_names?.map((name, i) => {
+                          const url = runeIconUrl(ddragon, name);
+                          return url ? (
+                            <img
+                              key={i}
+                              src={url}
+                              alt={name}
+                              title={name}
+                              className={`icon ${i === 0 ? "icon-rune-keystone" : "icon-rune"}`}
+                            />
+                          ) : (
+                            <span key={i} className="icon-fallback">
+                              {name}
+                            </span>
+                          );
+                        })}
+                      </div>
+                      <div className="rune-col rune-col-secondary">
+                        {runes.secondary_rune_names?.map((name, i) => {
+                          const url = runeIconUrl(ddragon, name);
+                          return url ? (
+                            <img
+                              key={i}
+                              src={url}
+                              alt={name}
+                              title={name}
+                              className="icon icon-rune"
+                            />
+                          ) : (
+                            <span key={i} className="icon-fallback">
+                              {name}
+                            </span>
+                          );
+                        })}
+                        {runes.stat_mod_names && runes.stat_mod_names.length > 0 && (
+                          <div className="rune-shards">
+                            {runes.stat_mod_names.map((id, i) => {
+                              const url = statModIconUrl(id);
+                              const name = statModName(id);
+                              return url ? (
+                                <img
+                                  key={i}
+                                  src={url}
+                                  alt={name}
+                                  title={name}
+                                  className="icon icon-shard"
+                                />
+                              ) : (
+                                <span key={i} className="icon-fallback">
+                                  {name}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <span className={`stat conf-${confidenceFor(runes.play ?? 0)}`}>
+                      {winRate(runes.win ?? 0, runes.play ?? 0).toFixed(1)}% &middot;{" "}
+                      {formatGames(runes.play ?? 0)} games
+                    </span>
+                  </div>
+                )
               )}
 
-              {skills && (
+              {activeManualBuild ? (
                 <div className="build-row">
                   <span className="build-row-label">SKILL ORDER</span>
-                  <SkillGrid order={extendSkillOrder(skills)} />
+                  <SkillGrid order={activeManualBuild.skillOrder} />
                 </div>
+              ) : (
+                skills && (
+                  <div className="build-row">
+                    <span className="build-row-label">SKILL ORDER</span>
+                    <SkillGrid order={extendSkillOrder(skills)} />
+                  </div>
+                )
               )}
 
+              {strong.length === 0 && weak.length === 0 && analysis.data?.counters_meta?.message ? (
+                <p className="counters-empty-note">{analysis.data.counters_meta.message}</p>
+              ) : (
               <div className="counters">
                 <div className="counter-col">
                   <span className="build-row-label">BEST INTO</span>
@@ -753,6 +979,7 @@ export default function ChampionLookup({
                   })}
                 </div>
               </div>
+              )}
             </div>
           </div>
 

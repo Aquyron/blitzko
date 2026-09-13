@@ -81,11 +81,32 @@ pub struct LiveEnemy {
     pub champion_name: String,
     pub game_name: String,
     pub tag_line: String,
+    /// "TOP"/"JUNGLE"/"MIDDLE"/"BOTTOM"/"UTILITY", or "NONE" when the client
+    /// hasn't assigned one (common in customs/blind pick) — matches the
+    /// same position strings OP.GG's match history reports, so no
+    /// normalization is needed to compare them.
+    pub position: String,
+    pub spell1_name: String,
+    pub spell2_name: String,
+    pub keystone_name: String,
+    pub primary_tree_name: String,
+    pub secondary_tree_name: String,
 }
 
 /// Finds the local player's team (by matching `activePlayer`'s Riot ID
 /// against `allPlayers[]`) and returns everyone on the other team.
 pub fn parse_enemies(data: &Value) -> Vec<LiveEnemy> {
+    parse_team(data, false)
+}
+
+/// Same as `parse_enemies` but for the local player's own team (bots
+/// included — filtered out downstream by an empty `riotIdGameName`, same
+/// as enemies).
+pub fn parse_allies(data: &Value) -> Vec<LiveEnemy> {
+    parse_team(data, true)
+}
+
+fn parse_team(data: &Value, want_own_team: bool) -> Vec<LiveEnemy> {
     let Some(players) = data.get("allPlayers").and_then(|v| v.as_array()) else {
         return Vec::new();
     };
@@ -108,7 +129,10 @@ pub fn parse_enemies(data: &Value) -> Vec<LiveEnemy> {
 
     players
         .iter()
-        .filter(|p| p.get("team").and_then(|v| v.as_str()) != Some(my_team))
+        .filter(|p| {
+            let same_team = p.get("team").and_then(|v| v.as_str()) == Some(my_team);
+            same_team == want_own_team
+        })
         .filter_map(|p| {
             let champion_name = p.get("championName")?.as_str()?.to_string();
             let game_name = p.get("riotIdGameName")?.as_str()?.to_string();
@@ -116,10 +140,46 @@ pub fn parse_enemies(data: &Value) -> Vec<LiveEnemy> {
             if game_name.is_empty() {
                 return None;
             }
+            let position = p
+                .get("position")
+                .and_then(|v| v.as_str())
+                .unwrap_or("NONE")
+                .to_string();
+            let spell1_name = p
+                .pointer("/summonerSpells/summonerSpellOne/displayName")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let spell2_name = p
+                .pointer("/summonerSpells/summonerSpellTwo/displayName")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let keystone_name = p
+                .pointer("/runes/keystone/displayName")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let primary_tree_name = p
+                .pointer("/runes/primaryRuneTree/displayName")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let secondary_tree_name = p
+                .pointer("/runes/secondaryRuneTree/displayName")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
             Some(LiveEnemy {
                 champion_name,
                 game_name,
                 tag_line,
+                position,
+                spell1_name,
+                spell2_name,
+                keystone_name,
+                primary_tree_name,
+                secondary_tree_name,
             })
         })
         .collect()

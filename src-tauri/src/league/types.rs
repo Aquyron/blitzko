@@ -69,4 +69,17 @@ pub struct ChampSelectState {
     /// second teammate can't also lock the same one in, so suggested picks
     /// should skip these too.
     pub my_team_champion_ids: Vec<i64>,
+    /// One entry per teammate (local player included) — their internal
+    /// `summonerId` plus their assigned position in Riot's own raw casing
+    /// ("TOP"/"JUNGLE"/"MIDDLE"/"BOTTOM"/"UTILITY"), used to look up rank
+    /// and compare against their main role. Unlike the enemy team,
+    /// teammate identity isn't hidden during champ select.
+    pub my_team_members: Vec<TeamMemberInfo>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TeamMemberInfo {
+    pub summoner_id: i64,
+    pub position: String,
 }

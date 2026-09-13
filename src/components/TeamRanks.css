@@ -1,4 +1,4 @@
-.enemy-scout {
+.team-ranks {
   width: 960px;
   max-width: 94vw;
   display: flex;
@@ -11,73 +11,47 @@
   box-shadow: 0 12px 32px #00000060;
 }
 
-.enemy-scout-label {
+.team-ranks-label {
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-}
-
-.enemy-scout-label.enemy {
-  color: var(--red);
-}
-
-.enemy-scout-label.ally {
   color: var(--accent);
 }
 
-.enemy-scout-hint {
-  margin: 0;
-  font-size: 13px;
-  color: var(--text-dim);
-}
-
-.enemy-scout-list {
+.team-ranks-list {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-.enemy-scout-row {
+.team-ranks-row {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  align-items: center;
+  gap: 10px;
   padding: 8px 10px;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 10px;
+  font-size: 13px;
 }
 
-.enemy-scout-main {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.enemy-scout-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: 7px;
-  flex-shrink: 0;
-}
-
-.enemy-scout-name {
+.team-ranks-name {
   flex: 1;
   min-width: 0;
-  font-size: 13.5px;
   font-weight: 700;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.enemy-scout-tag {
+.team-ranks-tag {
   color: var(--text-dim);
   font-weight: 500;
   margin-left: 2px;
 }
 
-.enemy-scout-rank {
+.team-ranks-rank {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -87,66 +61,36 @@
   flex-shrink: 0;
 }
 
-.enemy-scout-rank-icon {
+.team-ranks-rank-icon {
   width: 20px;
   height: 20px;
 }
 
-.enemy-scout-wr {
+.team-ranks-wr {
   color: var(--text-dim);
 }
 
-.enemy-scout-details {
+.team-ranks-lane {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding-left: 42px;
-}
-
-.enemy-scout-loadout {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.enemy-scout-spell,
-.enemy-scout-rune-tree {
-  width: 22px;
-  height: 22px;
-  border-radius: 5px;
-}
-
-.enemy-scout-rune {
-  width: 22px;
-  height: 22px;
-}
-
-.enemy-scout-lane {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  gap: 6px;
   font-size: 12px;
+  color: var(--text-dim);
   flex-shrink: 0;
 }
 
-.enemy-scout-lane-wr {
-  color: var(--text-dim);
-  font-weight: 600;
-}
-
-.enemy-scout-lane-tag {
+.team-ranks-lane-tag {
   font-weight: 700;
   padding: 2px 8px;
   border-radius: 6px;
 }
 
-.enemy-scout-lane-tag.correct {
+.team-ranks-lane-tag.correct {
   color: var(--green);
   background: #22c55e1a;
 }
 
-.enemy-scout-lane-tag.autofill {
+.team-ranks-lane-tag.autofill {
   color: var(--yellow);
   background: #eab3081a;
 }

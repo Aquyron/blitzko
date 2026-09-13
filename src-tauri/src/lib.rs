@@ -3,6 +3,8 @@ mod data;
 mod league;
 mod state;
 
+use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
+
 use state::AppState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -11,6 +13,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             commands::get_league_status,
@@ -21,7 +24,10 @@ pub fn run() {
             commands::apply_summoner_spells,
             commands::submit_champ_select_action,
             commands::get_live_game_enemies,
+            commands::get_live_game_allies,
             commands::get_enemy_rank,
+            commands::get_enemy_lane_stats,
+            commands::get_teammate_rank,
             commands::get_champion_build,
             commands::get_champion_list,
             commands::get_lane_tier_list,
@@ -34,6 +40,15 @@ pub fn run() {
         .setup(|app| {
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(league::run(handle));
+
+            // A background League companion is only useful if it's
+            // actually running when League is — launch it at login so the
+            // user never has to remember to open it themselves.
+            let autostart = app.autolaunch();
+            if !autostart.is_enabled().unwrap_or(false) {
+                let _ = autostart.enable();
+            }
+
             Ok(())
         })
         .run(tauri::generate_context!())

@@ -14,6 +14,7 @@ const CHAMPION_ANALYSIS_TTL: Duration = Duration::from_secs(20 * 60);
 const LANE_META_TTL: Duration = Duration::from_secs(20 * 60);
 const ARAM_AUGMENTS_TTL: Duration = Duration::from_secs(20 * 60);
 const SUMMONER_PROFILE_TTL: Duration = Duration::from_secs(20 * 60);
+const SUMMONER_MATCHES_TTL: Duration = Duration::from_secs(20 * 60);
 
 /// Fields requested from `lol_get_champion_analysis`, matching the "closed
 /// set" the tool documents via `tools/list`. Keep this in sync with that
@@ -221,6 +222,41 @@ impl OpggDataService {
             .call_tool("lol_get_summoner_profile", args)
             .await?;
         self.cache.set(key, value.clone(), SUMMONER_PROFILE_TTL).await;
+        Ok(value)
+    }
+
+    /// Recent match history for one summoner — used to work out their main
+    /// role and their win rate specifically in whatever position they're
+    /// playing in the current live game.
+    pub async fn summoner_matches(
+        &self,
+        game_name: &str,
+        tag_line: &str,
+        region: &str,
+    ) -> Result<Value, OpggError> {
+        let key = format!("summoner_matches:{region}:{game_name}#{tag_line}");
+        if let Some(cached) = self.cache.get(&key).await {
+            return Ok(cached);
+        }
+
+        let args = serde_json::json!({
+            "game_name": game_name,
+            "tag_line": tag_line,
+            "region": region,
+            "limit": 20,
+            "desired_output_fields": [
+                "data.game_history[].game_type",
+                "data.game_history[].participants[].position",
+                "data.game_history[].participants[].stats.result",
+                "data.game_history[].participants[].summoner.game_name",
+                "data.game_history[].participants[].summoner.tagline",
+            ],
+        });
+        let value = self
+            .client
+            .call_tool("lol_list_summoner_matches", args)
+            .await?;
+        self.cache.set(key, value.clone(), SUMMONER_MATCHES_TTL).await;
         Ok(value)
     }
 }

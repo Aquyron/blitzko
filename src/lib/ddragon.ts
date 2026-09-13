@@ -7,6 +7,7 @@ export type DdragonIndex = {
   championByName: Map<string, { id: string; key: string }>;
   itemByName: Map<string, string>;
   spellByKey: Map<string, { name: string; image: string }>;
+  spellByName: Map<string, { image: string; key: string }>;
   runeByName: Map<string, { icon: string; id: number }>;
   runeStyleByName: Map<string, { icon: string; id: number }>;
 };
@@ -39,8 +40,18 @@ export async function loadDdragonIndex(): Promise<DdragonIndex> {
   }
 
   const spellByKey = new Map<string, { name: string; image: string }>();
+  // Same trap as items: Data Dragon lists a spell like "Flash" multiple
+  // times across game-mode variants (e.g. key 74 is a reskinned "Jade"-mode
+  // Flash with a completely different icon) — keep the canonical
+  // (lowest-key) entry so an enemy scouted mid-game doesn't show some
+  // limited-mode reskin instead of the spell everyone actually recognizes.
+  const spellByName = new Map<string, { image: string; key: string }>();
   for (const spell of Object.values<any>(spells.data)) {
     spellByKey.set(spell.key, { name: spell.name, image: spell.image.full });
+    const existing = spellByName.get(spell.name);
+    if (!existing || Number(spell.key) < Number(existing.key)) {
+      spellByName.set(spell.name, { image: spell.image.full, key: spell.key });
+    }
   }
 
   const runeByName = new Map<string, { icon: string; id: number }>();
@@ -54,7 +65,15 @@ export async function loadDdragonIndex(): Promise<DdragonIndex> {
     }
   }
 
-  return { version, championByName, itemByName, spellByKey, runeByName, runeStyleByName };
+  return {
+    version,
+    championByName,
+    itemByName,
+    spellByKey,
+    spellByName,
+    runeByName,
+    runeStyleByName,
+  };
 }
 
 export async function loadChampionIdIndex(): Promise<Map<number, string>> {
@@ -78,6 +97,14 @@ export function itemIconUrl(idx: DdragonIndex, itemName: string): string | undef
 
 export function spellIconUrl(idx: DdragonIndex, spellKey: number): string | undefined {
   const spell = idx.spellByKey.get(String(spellKey));
+  return spell ? `${CDN}/cdn/${idx.version}/img/spell/${spell.image}` : undefined;
+}
+
+// Live client data only exposes a summoner spell's display name (e.g.
+// "Flash"), not its numeric key — this is the only source we have for
+// looking up an already-in-game enemy's spells.
+export function spellIconUrlByName(idx: DdragonIndex, spellName: string): string | undefined {
+  const spell = idx.spellByName.get(spellName);
   return spell ? `${CDN}/cdn/${idx.version}/img/spell/${spell.image}` : undefined;
 }
 

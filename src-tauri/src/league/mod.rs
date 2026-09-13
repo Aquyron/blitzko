@@ -333,6 +333,9 @@ fn set_status(app: &AppHandle, status: LeagueStatus) {
 }
 
 fn set_gameflow(app: &AppHandle, gameflow: GameflowState) {
+    // Temporary: confirming "GameStart" is really the loading-screen phase
+    // (vs. "InProgress" for the actual live match) against a real game.
+    eprintln!("[blitzko] gameflow phase: {}", gameflow.phase);
     if let Some(state) = app.try_state::<AppState>() {
         *state.gameflow.lock().unwrap() = gameflow.clone();
     }
