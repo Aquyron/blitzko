@@ -105,12 +105,16 @@ pub fn run() {
         })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|app, event| {
+        .run(|_app, _event| {
             // On macOS, clicking the Dock icon while the window is hidden
             // doesn't reopen it by default — Tauri leaves that decision to
-            // us.
-            if let tauri::RunEvent::Reopen { .. } = event {
-                if let Some(window) = app.get_webview_window("main") {
+            // us. `RunEvent::Reopen` only exists on macOS (Windows/Linux
+            // have no equivalent "dock reopen" concept) — confirmed by a
+            // failed Windows CI build (E0599: no variant `Reopen`) after
+            // this was first written without the cfg gate.
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen { .. } = _event {
+                if let Some(window) = _app.get_webview_window("main") {
                     let _ = window.show();
                     let _ = window.set_focus();
                 }
