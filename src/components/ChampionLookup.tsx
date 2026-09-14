@@ -5,6 +5,7 @@ import {
   championIconUrl,
   itemIconUrl,
   loadDdragonIndex,
+  opggChampionKey,
   runeIconUrl,
   spellIconUrl,
   spellName,
@@ -64,10 +65,6 @@ const TIERS = [
 const MODES = ["ranked", "flex", "aram", "urf", "nexus_blitz"];
 const ABILITIES = ["Q", "W", "E", "R"] as const;
 const MAX_LEVEL = 18;
-
-function toUpperSnake(ddragonId: string): string {
-  return ddragonId.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toUpperCase();
-}
 
 // OP.GG's skill priority data stops at level 15 — the remaining 3 points
 // are mechanically forced by Riot's leveling rules (R only levels at 6/11/16,
@@ -554,8 +551,7 @@ export default function ChampionLookup({
   // the player is just browsing past.
   async function prefetchAnalysis(champ: string, pos: string) {
     if (!ddragon) return;
-    const c = ddragon.championByName.get(champ);
-    const opggChampion = c ? toUpperSnake(c.id) : champ.toUpperCase();
+    const opggChampion = opggChampionKey(ddragon, champ);
     const effectivePosition = LANE_MODES.has(gameMode) ? pos : "mid";
     try {
       await fetchAnalysis(opggChampion, effectivePosition, tier, gameMode);
@@ -569,8 +565,7 @@ export default function ChampionLookup({
     setLoading(true);
     setError(null);
     try {
-      const c = ddragon.championByName.get(champion);
-      const opggChampion = c ? toUpperSnake(c.id) : champion.toUpperCase();
+      const opggChampion = opggChampionKey(ddragon, champion);
       const effectivePosition = LANE_MODES.has(gameMode) ? position : "mid";
       const result = await fetchAnalysis(opggChampion, effectivePosition, tier, gameMode);
       setAnalysis(result);
@@ -617,20 +612,13 @@ export default function ChampionLookup({
   }, [gameflowPhase]);
 
   async function applyItemSet() {
-    if (!ddragon || !analysis) return;
+    if (!ddragon) return;
     const c = ddragon.championByName.get(champion);
     if (!c) return;
     const championId = Number(c.key);
 
-    const toItemIds = (group?: ItemGroup) =>
-      (group?.ids_names ?? [])
-        .map((name) => ddragon.itemByName.get(name))
-        .filter((id): id is string => Boolean(id));
-
-    const toItemIdsFromOptions = (groups?: ItemGroup[]) =>
-      (groups ?? [])
-        .map((g) => g.ids_names?.[0])
-        .filter((name): name is string => Boolean(name))
+    const resolveNames = (names: string[]) =>
+      names
         .map((name) => ddragon.itemByName.get(name))
         .filter((id): id is string => Boolean(id));
 
@@ -641,15 +629,41 @@ export default function ChampionLookup({
       if (id) supportItemIds.push(id);
     }
 
-    const blocks = [
-      { blockType: "Support Item", itemIds: supportItemIds },
-      { blockType: "Starting Items", itemIds: toItemIds(analysis.data?.starter_items) },
-      { blockType: "Core Build", itemIds: toItemIds(analysis.data?.core_items) },
-      { blockType: "Boots", itemIds: toItemIds(analysis.data?.boots) },
-      { blockType: "4th Item Options", itemIds: toItemIdsFromOptions(analysis.data?.fourth_items) },
-      { blockType: "5th Item Options", itemIds: toItemIdsFromOptions(analysis.data?.fifth_items) },
-      { blockType: "6th Item Options", itemIds: toItemIdsFromOptions(analysis.data?.sixth_items) },
-    ];
+    let blocks: { blockType: string; itemIds: string[] }[];
+    if (activeManualBuild) {
+      // The hardcoded build, not OP.GG's raw (unconditioned, possibly
+      // wrong-style) aggregate — this is the whole point of the AD/AP
+      // toggle, and applying the OP.GG data here instead was the bug where
+      // the AD build never actually reached the in-game shop.
+      blocks = [
+        { blockType: "Support Item", itemIds: supportItemIds },
+        {
+          blockType: "Jungle Item",
+          itemIds: activeManualBuild.jungleItem ? resolveNames([activeManualBuild.jungleItem]) : [],
+        },
+        { blockType: "Core Build", itemIds: resolveNames(activeManualBuild.coreItems) },
+        { blockType: "Boots", itemIds: resolveNames([activeManualBuild.boots]) },
+        { blockType: "4th Item Options", itemIds: resolveNames(activeManualBuild.fourthOptions) },
+        { blockType: "5th Item Options", itemIds: resolveNames(activeManualBuild.fifthOptions) },
+        { blockType: "6th Item Options", itemIds: resolveNames(activeManualBuild.sixthOptions) },
+      ];
+    } else {
+      if (!analysis) return;
+      const toItemIds = (group?: ItemGroup) => resolveNames(group?.ids_names ?? []);
+      const toItemIdsFromOptions = (groups?: ItemGroup[]) =>
+        resolveNames(
+          (groups ?? []).map((g) => g.ids_names?.[0]).filter((name): name is string => Boolean(name))
+        );
+      blocks = [
+        { blockType: "Support Item", itemIds: supportItemIds },
+        { blockType: "Starting Items", itemIds: toItemIds(analysis.data?.starter_items) },
+        { blockType: "Core Build", itemIds: toItemIds(analysis.data?.core_items) },
+        { blockType: "Boots", itemIds: toItemIds(analysis.data?.boots) },
+        { blockType: "4th Item Options", itemIds: toItemIdsFromOptions(analysis.data?.fourth_items) },
+        { blockType: "5th Item Options", itemIds: toItemIdsFromOptions(analysis.data?.fifth_items) },
+        { blockType: "6th Item Options", itemIds: toItemIdsFromOptions(analysis.data?.sixth_items) },
+      ];
+    }
 
     try {
       await invoke("apply_item_set", {
@@ -663,6 +677,40 @@ export default function ChampionLookup({
   }
 
   async function applyRunes(source?: Analysis) {
+    if (activeManualBuild) {
+      // Same bug as applyItemSet: this must use the hardcoded AD/AP page,
+      // not OP.GG's raw (unconditioned) rune aggregate, or the toggle is a
+      // no-op on what actually gets pushed to the client.
+      if (!ddragon) return;
+      const spec = activeManualBuild.runes;
+      const primaryStyleId = ddragon.runeStyleByName.get(spec.primaryTree)?.id;
+      const secondaryStyleId = ddragon.runeStyleByName.get(spec.secondaryTree)?.id;
+      const primaryIds = spec.primaryRunes
+        .map((name) => ddragon.runeByName.get(name)?.id)
+        .filter((id): id is number => id !== undefined);
+      const secondaryIds = spec.secondaryRunes
+        .map((name) => ddragon.runeByName.get(name)?.id)
+        .filter((id): id is number => id !== undefined);
+      if (!primaryStyleId || !secondaryStyleId || primaryIds.length === 0) return;
+      setApplyStatus("applying");
+      setApplyMessage(null);
+      try {
+        const selectedPerkIds = [...primaryIds, ...secondaryIds, ...spec.statModIds];
+        const pageName = `Blitzko: ${champion} ${POSITION_LABELS[position] ?? position}`;
+        await invoke("apply_runes", {
+          pageName,
+          primaryStyleId,
+          subStyleId: secondaryStyleId,
+          selectedPerkIds,
+        });
+        setApplyStatus("success");
+      } catch (e) {
+        setApplyStatus("error");
+        setApplyMessage(String(e));
+      }
+      return;
+    }
+
     const runes = (source ?? analysis)?.data?.runes;
     if (!runes?.primary_page_id || !runes.primary_rune_ids || !runes.secondary_page_id) {
       return;

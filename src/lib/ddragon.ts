@@ -90,6 +90,15 @@ export function championIconUrl(idx: DdragonIndex, championName: string): string
   return c ? `${CDN}/cdn/${idx.version}/img/champion/${c.id}.png` : undefined;
 }
 
+// OP.GG's `champion` argument wants Data Dragon's champion id in
+// SCREAMING_SNAKE_CASE (e.g. "MonkeyKing" -> "MONKEY_KING"), not the
+// display name — shared by every place that calls `get_champion_build`.
+export function opggChampionKey(idx: DdragonIndex, championName: string): string {
+  const c = idx.championByName.get(championName);
+  const ddragonId = c ? c.id : championName;
+  return ddragonId.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toUpperCase();
+}
+
 export function itemIconUrl(idx: DdragonIndex, itemName: string): string | undefined {
   const id = idx.itemByName.get(itemName);
   return id ? `${CDN}/cdn/${idx.version}/img/item/${id}.png` : undefined;

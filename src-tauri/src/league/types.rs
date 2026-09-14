@@ -75,11 +75,25 @@ pub struct ChampSelectState {
     /// and compare against their main role. Unlike the enemy team,
     /// teammate identity isn't hidden during champ select.
     pub my_team_members: Vec<TeamMemberInfo>,
+    /// One entry per enemy who has locked in a champion so far, with their
+    /// assigned position — used to suggest picks that counter whichever
+    /// enemies are already known, instead of only ever showing the flat
+    /// tier list. Unlike `my_team_members`, no summoner identity here:
+    /// enemy identity stays hidden during champ select, only the champion
+    /// and role are known.
+    pub enemy_team_champions: Vec<EnemyChampionInfo>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct TeamMemberInfo {
     pub summoner_id: i64,
+    pub position: String,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct EnemyChampionInfo {
+    pub champion_id: i64,
     pub position: String,
 }

@@ -16,7 +16,7 @@
 
 use serde_json::Value;
 
-use super::types::{ChampSelectState, TeamMemberInfo};
+use super::types::{ChampSelectState, EnemyChampionInfo, TeamMemberInfo};
 
 pub fn parse_session(value: &Value) -> ChampSelectState {
     let local_cell_id = value.get("localPlayerCellId").and_then(|v| v.as_i64());
@@ -58,6 +58,30 @@ pub fn parse_session(value: &Value) -> ChampSelectState {
             team.iter()
                 .filter_map(|p| p.get("championId").and_then(|v| v.as_i64()))
                 .filter(|&id| id != 0)
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let enemy_team_champions = value
+        .get("theirTeam")
+        .and_then(|v| v.as_array())
+        .map(|team| {
+            team.iter()
+                .filter_map(|p| {
+                    let champion_id = p.get("championId").and_then(|v| v.as_i64())?;
+                    if champion_id == 0 {
+                        return None;
+                    }
+                    let position = p
+                        .get("assignedPosition")
+                        .and_then(|v| v.as_str())
+                        .filter(|s| !s.is_empty())
+                        .map(normalize_position)?;
+                    Some(EnemyChampionInfo {
+                        champion_id,
+                        position,
+                    })
+                })
                 .collect()
         })
         .unwrap_or_default();
@@ -123,6 +147,7 @@ pub fn parse_session(value: &Value) -> ChampSelectState {
         banned_champion_ids,
         my_team_champion_ids,
         my_team_members,
+        enemy_team_champions,
     }
 }
 

@@ -26,6 +26,7 @@ type ChampSelectState = {
   bannedChampionIds: number[];
   myTeamChampionIds: number[];
   myTeamMembers: { summonerId: number; position: string }[];
+  enemyTeamChampions: { championId: number; position: string }[];
 };
 
 function App() {
@@ -43,6 +44,7 @@ function App() {
     bannedChampionIds: [],
     myTeamChampionIds: [],
     myTeamMembers: [],
+    enemyTeamChampions: [],
   });
   const [championIdMap, setChampionIdMap] = useState<Map<number, string> | null>(null);
   const [tab, setTab] = useState<"build" | "tierlist">("build");
@@ -97,6 +99,7 @@ function App() {
             bannedChampionIds={champSelect.bannedChampionIds}
             myTeamChampionIds={champSelect.myTeamChampionIds}
             enemyChampionIds={champSelect.enemyChampionIds}
+            enemyTeamChampions={champSelect.enemyTeamChampions}
           />
         </>
       ) : (

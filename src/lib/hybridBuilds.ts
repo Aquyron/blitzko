@@ -15,6 +15,11 @@ export type RuneSpec = {
   primaryRunes: string[]; // keystone first
   secondaryTree: string;
   secondaryRunes: string[];
+  // Rune shards aren't in Data Dragon (see ddragon.ts's own STAT_MODS
+  // table) so they can't be resolved by name at apply time like the actual
+  // runes/items are — stored as the LCU perk ids directly instead:
+  // offense/flex/defense, matching the row order `apply_runes` expects.
+  statModIds: [number, number, number];
 };
 
 export type HybridBuildSpec = {
@@ -42,6 +47,8 @@ const SHACO_JUNGLE: HybridBuilds = {
       primaryRunes: ["Hail of Blades", "Sudden Impact", "Sixth Sense", "Treasure Hunter"],
       secondaryTree: "Precision",
       secondaryRunes: ["Legend: Alacrity", "Cut Down"],
+      // Offense: Attack Speed(5005) / Flex: Adaptive Force(5008) / Defense: Health Scaling(5001)
+      statModIds: [5005, 5008, 5001],
     },
     jungleItem: "Scorchclaw Pup",
     coreItems: ["Umbral Glaive", "Voltaic Cyclosword", "Boots of Swiftness"],
@@ -61,6 +68,8 @@ const SHACO_JUNGLE: HybridBuilds = {
       primaryRunes: ["Arcane Comet", "Axiom Arcanist", "Transcendence", "Gathering Storm"],
       secondaryTree: "Precision",
       secondaryRunes: ["Legend: Haste", "Cut Down"],
+      // Offense: Ability Haste(5007) / Flex: Adaptive Force(5008) / Defense: Health Scaling(5001)
+      statModIds: [5007, 5008, 5001],
     },
     jungleItem: "Scorchclaw Pup",
     coreItems: ["Blackfire Torch", "Ionian Boots of Lucidity", "Liandry's Torment"],

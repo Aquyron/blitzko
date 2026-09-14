@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { DdragonIndex, championIconUrl, loadDdragonIndex } from "../lib/ddragon";
+import { DdragonIndex, championIconUrl, loadDdragonIndex, opggChampionKey } from "../lib/ddragon";
 import { gradeColorVar, gradeFromTier } from "../lib/recommendation";
 import "./ChampSelectAssist.css";
 
@@ -16,6 +16,12 @@ type LaneMetaResponse = {
   };
 };
 
+type CounterAnalysisResponse = {
+  data?: {
+    weak_counters?: { champion_name?: string }[];
+  };
+};
+
 type Props = {
   myPosition: string | null;
   myActionId: number | null;
@@ -24,12 +30,14 @@ type Props = {
   bannedChampionIds: number[];
   myTeamChampionIds: number[];
   enemyChampionIds: number[];
+  enemyTeamChampions: { championId: number; position: string }[];
 };
 
 type Suggestion = {
   champion: string;
   championId: number;
   tier: number;
+  countersEnemies: string[];
 };
 
 export default function ChampSelectAssist({
@@ -40,10 +48,18 @@ export default function ChampSelectAssist({
   bannedChampionIds,
   myTeamChampionIds,
   enemyChampionIds,
+  enemyTeamChampions,
 }: Props) {
   const [ddragon, setDdragon] = useState<DdragonIndex | null>(null);
   const [entries, setEntries] = useState<LaneEntry[]>([]);
   const [submitting, setSubmitting] = useState<number | null>(null);
+  // champion name -> names of already-picked enemies it counters well,
+  // per OP.GG's own weak_counters for each enemy (i.e. "champions that beat
+  // this enemy"). Only meaningful once at least one enemy has locked a
+  // champion — empty otherwise, which naturally falls back to plain tier
+  // order below.
+  const [counterInfo, setCounterInfo] = useState<Record<string, string[]>>({});
+  const fetchedEnemyKeys = useRef(new Set<string>());
   // The LCU session can momentarily report no position/spells right as champ
   // select is wrapping up (about to unmount anyway) — stick with the last
   // real reading instead of flashing back to "detecting" for one frame.
@@ -74,6 +90,50 @@ export default function ChampSelectAssist({
     };
   }, [position]);
 
+  const idToName = useMemo(() => {
+    const m = new Map<number, string>();
+    if (!ddragon) return m;
+    for (const [name, c] of ddragon.championByName) m.set(Number(c.key), name);
+    return m;
+  }, [ddragon]);
+
+  // Once an enemy has actually locked a champion, pull who counters *them*
+  // (OP.GG's own weak_counters for that enemy) so a great counter pick can
+  // be surfaced ahead of the plain tier list — one request per enemy
+  // champion, not per suggestion, and cached both here and server-side so
+  // re-renders don't refetch.
+  useEffect(() => {
+    if (!ddragon) return;
+    for (const enemy of enemyTeamChampions) {
+      const name = idToName.get(enemy.championId);
+      if (!name) continue;
+      const key = `${name}:${enemy.position}`;
+      if (fetchedEnemyKeys.current.has(key)) continue;
+      fetchedEnemyKeys.current.add(key);
+      const opggChampion = opggChampionKey(ddragon, name);
+      invoke<CounterAnalysisResponse>("get_champion_build", {
+        champion: opggChampion,
+        position: enemy.position,
+        tier: "emerald_plus",
+        gameMode: "ranked",
+      })
+        .then((res) => {
+          const counters = (res.data?.weak_counters ?? [])
+            .map((c) => c.champion_name)
+            .filter((n): n is string => Boolean(n));
+          if (counters.length === 0) return;
+          setCounterInfo((prev) => {
+            const next = { ...prev };
+            for (const counterName of counters) {
+              next[counterName] = [...(next[counterName] ?? []), name];
+            }
+            return next;
+          });
+        })
+        .catch(() => {});
+    }
+  }, [ddragon, enemyTeamChampions, idToName]);
+
   if (!ddragon) return null;
 
   if (!position || entries.length === 0) {
@@ -91,7 +151,12 @@ export default function ChampSelectAssist({
   const toSuggestion = (e: LaneEntry): Suggestion | null => {
     const key = ddragon.championByName.get(e.champion)?.key;
     if (!key) return null;
-    return { champion: e.champion, championId: Number(key), tier: e.tier };
+    return {
+      champion: e.champion,
+      championId: Number(key),
+      tier: e.tier,
+      countersEnemies: counterInfo[e.champion] ?? [],
+    };
   };
 
   const banned = new Set(bannedChampionIds);
@@ -100,11 +165,20 @@ export default function ChampSelectAssist({
 
   const suggestions = entries.map(toSuggestion).filter((s): s is Suggestion => s !== null);
 
+  // Once an enemy has actually locked a champion, a real counter to them
+  // beats a generically-strong pick — bubble those to the front of the
+  // pick list. Stable sort keeps the existing tier order within each group,
+  // and this is a no-op before anyone's picked anything (countersEnemies is
+  // empty for everyone), so first-pick behavior is unchanged.
+  const pickRanked = [...suggestions].sort(
+    (a, b) => (b.countersEnemies.length > 0 ? 1 : 0) - (a.countersEnemies.length > 0 ? 1 : 0)
+  );
+
   const suggestedBans = suggestions
     .filter((s) => !banned.has(s.championId) && !mine.has(s.championId) && !enemy.has(s.championId))
     .slice(0, 3);
 
-  const suggestedPicks = suggestions
+  const suggestedPicks = pickRanked
     .filter((s) => !banned.has(s.championId) && !mine.has(s.championId))
     .slice(0, 6);
 
@@ -145,6 +219,9 @@ export default function ChampSelectAssist({
             <span className="csa-grade" style={{ color: gradeColorVar(grade) }}>
               {grade}
             </span>
+            {s.countersEnemies.length > 0 && (
+              <span className="csa-counter-tag">Counters {s.countersEnemies.join(", ")}</span>
+            )}
           </button>
         );
       })}
