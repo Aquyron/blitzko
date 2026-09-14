@@ -611,6 +611,18 @@ export default function ChampionLookup({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameflowPhase]);
 
+  // Modes with no real lane (ARAM/URF/Nexus Blitz) always fall back to
+  // "mid" internally just to satisfy OP.GG's API — showing that leftover
+  // "Mid" in the applied page/item-set name was confusing ("Blitzko: Xerath
+  // Mid" in an ARAM game you never picked a lane for), so the label uses
+  // the actual mode instead of the meaningless position for those.
+  function buildLabel(): string {
+    const suffix = LANE_MODES.has(gameMode)
+      ? POSITION_LABELS[position] ?? position
+      : gameMode.toUpperCase();
+    return `Blitzko: ${champion} ${suffix}`;
+  }
+
   async function applyItemSet() {
     if (!ddragon) return;
     const c = ddragon.championByName.get(champion);
@@ -667,7 +679,7 @@ export default function ChampionLookup({
 
     try {
       await invoke("apply_item_set", {
-        title: `Blitzko: ${champion} ${POSITION_LABELS[position] ?? position}`,
+        title: buildLabel(),
         championId,
         blocks,
       });
@@ -677,6 +689,8 @@ export default function ChampionLookup({
   }
 
   async function applyRunes(source?: Analysis) {
+    // Per explicit user direction: never push a rune page for ARAM.
+    if (gameMode === "aram") return;
     if (activeManualBuild) {
       // Same bug as applyItemSet: this must use the hardcoded AD/AP page,
       // not OP.GG's raw (unconditioned) rune aggregate, or the toggle is a
@@ -696,7 +710,7 @@ export default function ChampionLookup({
       setApplyMessage(null);
       try {
         const selectedPerkIds = [...primaryIds, ...secondaryIds, ...spec.statModIds];
-        const pageName = `Blitzko: ${champion} ${POSITION_LABELS[position] ?? position}`;
+        const pageName = buildLabel();
         await invoke("apply_runes", {
           pageName,
           primaryStyleId,
@@ -723,7 +737,7 @@ export default function ChampionLookup({
         ...(runes.secondary_rune_ids ?? []),
         ...(runes.stat_mod_names ?? []),
       ];
-      const pageName = `Blitzko: ${champion} ${POSITION_LABELS[position] ?? position}`;
+      const pageName = buildLabel();
       await invoke("apply_runes", {
         pageName,
         primaryStyleId: runes.primary_page_id,
@@ -937,7 +951,7 @@ export default function ChampionLookup({
                 </>
               )}
 
-              {activeManualBuild ? (
+              {gameMode !== "aram" && (activeManualBuild ? (
                 <div className="build-row">
                   <span className="build-row-label">RUNES</span>
                   <div className="rune-page">
@@ -1042,7 +1056,7 @@ export default function ChampionLookup({
                     </span>
                   </div>
                 )
-              )}
+              ))}
 
               {activeManualBuild ? (
                 <div className="build-row">

@@ -119,16 +119,19 @@ function App() {
             </button>
           </div>
 
-          {tab === "build" ? (
+          {/* Kept mounted (just hidden) instead of unmounted on tab switch —
+              its "push item set once the game starts" effect must keep
+              running even while you're looking at the Tier List tab, not
+              only while the Champion Build tab happens to be visible. */}
+          <div hidden={tab !== "build"}>
             <ChampionLookup
               autoChampion={autoChampion}
               autoPosition={autoPosition}
               autoGameMode={autoGameMode}
               gameflowPhase={gameflow.phase}
             />
-          ) : (
-            <TierList />
-          )}
+          </div>
+          {tab === "tierlist" && <TierList />}
 
           {/* Both teams' Riot IDs only become readable once the game is
               truly live (confirmed live — the feed doesn't respond during
