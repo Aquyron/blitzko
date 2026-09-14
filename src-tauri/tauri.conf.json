@@ -12,6 +12,7 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "Blitzko",
         "width": 960,
         "height": 820,
