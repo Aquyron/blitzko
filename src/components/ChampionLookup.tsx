@@ -330,6 +330,10 @@ export default function ChampionLookup({
     setSpellsSwapped((prev) => {
       const next = !prev;
       localStorage.setItem("blitzko_spells_swapped", String(next));
+      // Push immediately instead of waiting for the next render's stale
+      // `spellsSwapped` closure to catch up — the whole point of the
+      // button is an instant in-client swap, not a delayed one.
+      applySpells(undefined, next);
       return next;
     });
   }
@@ -459,6 +463,21 @@ export default function ChampionLookup({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoChampion, autoPosition]);
 
+  // OP.GG's own analysis endpoint is the actual bottleneck (measured 4+
+  // seconds per call, live, regardless of session/caching on our end) — the
+  // 300ms settle-debounce above is negligible next to that. The one real
+  // lever we have is starting the request earlier: the instant champ select
+  // shows a hover/pick, not 300ms after it "settles". Most picks are hovered
+  // for several seconds before being locked in, so this often finishes
+  // before lock-in and the real load below then hits `fetchAnalysis`'s
+  // in-flight cache instead of waiting out another 4s round trip.
+  useEffect(() => {
+    if (!ddragon || !autoChampion) return;
+    const pos = autoPosition && POSITIONS.includes(autoPosition) ? autoPosition : position;
+    prefetchAnalysis(autoChampion, pos);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ddragon, autoChampion, autoPosition]);
+
   useEffect(() => {
     loadDdragonIndex().then((idx) => {
       setDdragon(idx);
@@ -474,10 +493,27 @@ export default function ChampionLookup({
   // same build shortly after — firing both meant two redundant network
   // round trips racing each other, which is what made runes/spells land in
   // the client noticeably slower than they needed to.
+  const prevTierRef = useRef(tier);
+  const prevGameModeRef = useRef(gameMode);
+
   useEffect(() => {
     if (!ddragon) return;
+    // Only the champion/position seeding effects above should be treated as
+    // "auto-driven" (and skipped here to avoid the double-fetch race with
+    // the dedicated auto-apply effect) — a manual tier or mode change must
+    // always reload, even while champion/position still match the live
+    // champ-select pick. Without this, switching to Diamond/Challenger
+    // tier mid champ-select silently did nothing and the client kept
+    // whatever tier (usually the emerald_plus default) had already been
+    // auto-applied.
+    const tierOrModeChanged =
+      tier !== prevTierRef.current || gameMode !== prevGameModeRef.current;
+    prevTierRef.current = tier;
+    prevGameModeRef.current = gameMode;
     const isAutoDriven =
-      autoChampion === champion && (!autoPosition || autoPosition === position);
+      !tierOrModeChanged &&
+      autoChampion === champion &&
+      (!autoPosition || autoPosition === position);
     if (isAutoDriven) return;
     const handle = setTimeout(() => {
       load();
@@ -485,6 +521,48 @@ export default function ChampionLookup({
     return () => clearTimeout(handle);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ddragon, champion, position, tier, gameMode]);
+
+  // Coalesces concurrent requests for the same (champion, position, tier,
+  // mode): the hover-triggered prefetch and the debounced "real" load often
+  // land within the same multi-second OP.GG round trip, and without this
+  // they'd fire two identical, independently-billed requests instead of
+  // sharing one.
+  const inFlightRef = useRef(new Map<string, Promise<Analysis>>());
+  function fetchAnalysis(
+    opggChampion: string,
+    effectivePosition: string,
+    tierArg: string,
+    gameModeArg: string
+  ): Promise<Analysis> {
+    const key = `${opggChampion}|${effectivePosition}|${tierArg}|${gameModeArg}`;
+    const existing = inFlightRef.current.get(key);
+    if (existing) return existing;
+    const promise = invoke<Analysis>("get_champion_build", {
+      champion: opggChampion,
+      position: effectivePosition,
+      tier: tierArg,
+      gameMode: gameModeArg,
+    }).finally(() => {
+      inFlightRef.current.delete(key);
+    });
+    inFlightRef.current.set(key, promise);
+    return promise;
+  }
+
+  // Fire-and-forget cache warm for a hovered/picked champion — never touches
+  // loading/error/analysis state, so it can't flash the UI for a champion
+  // the player is just browsing past.
+  async function prefetchAnalysis(champ: string, pos: string) {
+    if (!ddragon) return;
+    const c = ddragon.championByName.get(champ);
+    const opggChampion = c ? toUpperSnake(c.id) : champ.toUpperCase();
+    const effectivePosition = LANE_MODES.has(gameMode) ? pos : "mid";
+    try {
+      await fetchAnalysis(opggChampion, effectivePosition, tier, gameMode);
+    } catch {
+      // Best-effort only — the real load will retry and surface any error.
+    }
+  }
 
   async function load() {
     if (!ddragon) return;
@@ -494,12 +572,7 @@ export default function ChampionLookup({
       const c = ddragon.championByName.get(champion);
       const opggChampion = c ? toUpperSnake(c.id) : champion.toUpperCase();
       const effectivePosition = LANE_MODES.has(gameMode) ? position : "mid";
-      const result = await invoke<Analysis>("get_champion_build", {
-        champion: opggChampion,
-        position: effectivePosition,
-        tier,
-        gameMode,
-      });
+      const result = await fetchAnalysis(opggChampion, effectivePosition, tier, gameMode);
       setAnalysis(result);
       setApplyStatus("idle");
 
@@ -519,10 +592,11 @@ export default function ChampionLookup({
     loadRef.current = load;
   });
 
-  async function applySpells(source?: Analysis) {
+  async function applySpells(source?: Analysis, swappedOverride?: boolean) {
     const ids = (source ?? analysis)?.data?.summoner_spells?.ids;
     if (!ids || ids.length < 2) return;
-    const [first, second] = spellsSwapped ? [ids[1], ids[0]] : [ids[0], ids[1]];
+    const swapped = swappedOverride ?? spellsSwapped;
+    const [first, second] = swapped ? [ids[1], ids[0]] : [ids[0], ids[1]];
     try {
       await invoke("apply_summoner_spells", { spell1Id: first, spell2Id: second });
     } catch (e) {

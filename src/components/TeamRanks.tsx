@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { rankIconUrl } from "../lib/riotAssets";
+import { sortByPosition } from "../lib/roles";
 import "./TeamRanks.css";
 
 type Member = { summonerId: number; position: string };
@@ -54,7 +55,7 @@ export default function TeamRanks({ members }: { members: Member[] }) {
     <div className="team-ranks">
       <div className="team-ranks-label">My Team</div>
       <div className="team-ranks-list">
-        {members.map((member) => {
+        {sortByPosition(members, (m) => m.position).map((member) => {
           const data = info[member.summonerId];
           const stats = data?.rank?.data?.summoner?.league_stats ?? [];
           const solo = pickSoloQueue(stats);

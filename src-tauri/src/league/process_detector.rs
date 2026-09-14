@@ -28,9 +28,18 @@ pub fn candidate_lockfile_paths() -> Vec<PathBuf> {
         // (default-location) case where that file is missing or its shape
         // has changed.
         let mut candidates = read_riot_client_installs();
-        candidates.push(PathBuf::from(r"C:\Riot Games\League of Legends\lockfile"));
-        candidates.push(PathBuf::from(r"D:\Riot Games\League of Legends\lockfile"));
-        candidates.push(PathBuf::from(r"E:\Riot Games\League of Legends\lockfile"));
+        // Covers every possible drive letter, not just C/D/E — a friend's
+        // install on, say, E: (or any other letter) at the default
+        // `<drive>:\Riot Games\League of Legends` path still gets found
+        // even if RiotClientInstalls.json is missing/unreadable. Cheap:
+        // each candidate is only ever touched by an `exists()` check on its
+        // parent dir, so a non-existent drive letter just gets skipped.
+        for letter in b'A'..=b'Z' {
+            candidates.push(PathBuf::from(format!(
+                "{}:\\Riot Games\\League of Legends\\lockfile",
+                letter as char
+            )));
+        }
         candidates
     }
 

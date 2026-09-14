@@ -8,6 +8,7 @@ import {
   spellIconUrlByName,
 } from "../lib/ddragon";
 import { rankIconUrl } from "../lib/riotAssets";
+import { sortByPosition } from "../lib/roles";
 import "./EnemyScout.css";
 
 type EnemyInfo = {
@@ -182,7 +183,7 @@ export default function EnemyScout({ label, fetchCommand, variant }: Props) {
       {!enemies && !error && <p className="enemy-scout-hint">Loading live game data...</p>}
       {enemies && (
         <div className="enemy-scout-list">
-          {enemies.map((enemy) => {
+          {sortByPosition(enemies, (e) => e.position).map((enemy) => {
             const icon = championIconUrl(ddragon, enemy.championName);
             const key = `${enemy.gameName}#${enemy.tagLine}`;
             const rank = ranks[key];

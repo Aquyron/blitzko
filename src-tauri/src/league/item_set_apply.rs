@@ -50,9 +50,22 @@ pub async fn apply_item_set(
         .cloned()
         .unwrap_or_default();
     sets.retain(|s| {
-        !s.get("title")
+        let is_ours = s
+            .get("title")
             .and_then(|t| t.as_str())
-            .is_some_and(|t| t.starts_with(TITLE_PREFIX))
+            .is_some_and(|t| t.starts_with(TITLE_PREFIX));
+        // The client itself seeds a blank "New Item Set" (empty blocks) the
+        // first time the in-game shop's item-set editor is opened with none
+        // present — confirmed live. It's useless (no items) but, being
+        // untitled/unassociated, the shop was defaulting to it as the first
+        // tab ahead of the real Blitzko build, so the player had to
+        // manually switch every game. Drop any set with no blocks — it can
+        // never contribute anything to the shop regardless of title.
+        let is_blank = s
+            .get("blocks")
+            .and_then(|b| b.as_array())
+            .is_none_or(|b| b.is_empty());
+        !is_ours && !is_blank
     });
 
     let blocks: Vec<Value> = spec
