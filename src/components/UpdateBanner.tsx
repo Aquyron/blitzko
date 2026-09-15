@@ -8,14 +8,24 @@ export default function UpdateBanner() {
   const [status, setStatus] = useState<"idle" | "installing" | "error">("idle");
 
   useEffect(() => {
-    check()
-      .then((result) => {
-        if (result?.available) setUpdate(result);
-      })
-      .catch(() => {
-        // No network, no releases yet, etc. — silently skip, this is a
-        // background check, not something the user needs to see fail.
-      });
+    function runCheck() {
+      check()
+        .then((result) => {
+          if (result?.available) setUpdate(result);
+        })
+        .catch(() => {
+          // No network, no releases yet, etc. — silently skip, this is a
+          // background check, not something the user needs to see fail.
+        });
+    }
+
+    runCheck();
+    // The app can sit alive in the tray for days without ever being
+    // relaunched — re-check periodically so a release published while it's
+    // running still surfaces the banner instead of waiting for a manual
+    // quit/reopen.
+    const interval = setInterval(runCheck, 30 * 60 * 1000);
+    return () => clearInterval(interval);
   }, []);
 
   if (!update) return null;
