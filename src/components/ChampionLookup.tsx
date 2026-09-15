@@ -320,9 +320,10 @@ export default function ChampionLookup({
   // Which physical key (D or F) gets the *first* summoner spell OP.GG lists
   // — purely a personal keybind preference, so it's remembered across
   // sessions rather than reset every time.
-  const [spellsSwapped, setSpellsSwapped] = useState(
-    () => localStorage.getItem("blitzko_spells_swapped") === "true"
-  );
+  const [spellsSwapped, setSpellsSwapped] = useState(() => {
+    const stored = localStorage.getItem("blitzko_spells_swapped");
+    return stored === null ? true : stored === "true";
+  });
   function toggleSpellsSwapped() {
     setSpellsSwapped((prev) => {
       const next = !prev;
