@@ -6,6 +6,7 @@ import TierList from "./components/TierList";
 import ChampSelectAssist from "./components/ChampSelectAssist";
 import TeamRanks from "./components/TeamRanks";
 import EnemyScout from "./components/EnemyScout";
+import PostGameStats from "./components/PostGameStats";
 import UpdateBanner from "./components/UpdateBanner";
 import { loadChampionIdIndex } from "./lib/ddragon";
 import logo from "./assets/blitzko-logo.png";
@@ -88,6 +89,9 @@ function App() {
       <div className="app-stack">
       <img src={logo} alt="Blitzko" className="app-logo" />
       <UpdateBanner />
+      {(gameflow.phase === "WaitingForStats" || gameflow.phase === "EndOfGame") && (
+        <PostGameStats />
+      )}
       {champSelect.active && !champSelect.myChampionLocked ? (
         <>
           <TeamRanks members={champSelect.myTeamMembers} />

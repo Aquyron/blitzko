@@ -214,6 +214,15 @@ impl LcuClient {
         self.get("/lol-champ-select/v1/session").await
     }
 
+    /// The post-game scoreboard the LCU's own end-of-game screen renders
+    /// from — community-documented, not officially published by Riot.
+    /// **Unverified live** — only reachable for a short window right after
+    /// a match ends (`WaitingForStats`/`EndOfGame`), so callers should treat
+    /// a failure here as "not ready yet" and retry rather than a hard error.
+    pub async fn eog_stats_block(&self) -> Result<Value, reqwest::Error> {
+        self.get("/lol-end-of-game/v1/eog-stats-block").await
+    }
+
     /// Streams every LCU push event over the WAMP-style event WebSocket, plus
     /// a slow gameflow-phase poll as a safety net in case the socket framing
     /// doesn't match on a given client version (community-documented, not

@@ -36,6 +36,7 @@ pub fn run() {
             commands::apply_item_set,
             commands::apply_summoner_spells,
             commands::submit_champ_select_action,
+            commands::get_post_game_stats,
             commands::get_live_game_enemies,
             commands::get_live_game_allies,
             commands::get_enemy_rank,

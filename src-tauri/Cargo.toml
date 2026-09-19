@@ -1,6 +1,6 @@
 [package]
 name = "blitzko"
-version = "0.1.10"
+version = "0.1.11"
 description = "League of Legends companion app"
 authors = ["you"]
 edition = "2021"

@@ -3,6 +3,7 @@ use tauri::State;
 
 use crate::league::item_set_apply::{self, ItemBlock, ItemBlockInput, ItemSetSpec};
 use crate::league::live_client::{self, LiveClient};
+use crate::league::post_game::{self, PostGameState};
 use crate::league::rune_apply::{self, RuneSpec};
 use crate::league::types::{ChampSelectState, GameflowState, LeagueStatus};
 use crate::state::AppState;
@@ -108,6 +109,23 @@ pub async fn apply_summoner_spells(
         .set_champ_select_spells(spell1_id, spell2_id)
         .await
         .map_err(|e| e.to_string())
+}
+
+/// The post-game scoreboard (kills/deaths/damage/gold/... per player, plus
+/// our own MVP ranking heuristic) — only actually populated by the LCU for
+/// a short window right after a match ends, so callers should retry rather
+/// than treat one failure as final.
+#[tauri::command]
+pub async fn get_post_game_stats(state: State<'_, AppState>) -> Result<PostGameState, String> {
+    let client = state
+        .current_client
+        .lock()
+        .unwrap()
+        .clone()
+        .ok_or_else(|| "League Client is not connected".to_string())?;
+
+    let data = client.eog_stats_block().await.map_err(|e| e.to_string())?;
+    Ok(post_game::parse_eog_stats(&data))
 }
 
 #[tauri::command]
