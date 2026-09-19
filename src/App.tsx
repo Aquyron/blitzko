@@ -49,6 +49,7 @@ function App() {
   });
   const [championIdMap, setChampionIdMap] = useState<Map<number, string> | null>(null);
   const [tab, setTab] = useState<"build" | "tierlist">("build");
+  const [champSelectTab, setChampSelectTab] = useState<"suggestions" | "tierlist">("suggestions");
 
   useEffect(() => {
     invoke<GameflowState>("get_gameflow_phase").then(setGameflow);
@@ -95,16 +96,34 @@ function App() {
       {champSelect.active && !champSelect.myChampionLocked ? (
         <>
           <TeamRanks members={champSelect.myTeamMembers} />
-          <ChampSelectAssist
-            myPosition={champSelect.myPosition}
-            myActionId={champSelect.myActionId}
-            myActionType={champSelect.myActionType}
-            myBanPending={champSelect.myBanPending}
-            bannedChampionIds={champSelect.bannedChampionIds}
-            myTeamChampionIds={champSelect.myTeamChampionIds}
-            enemyChampionIds={champSelect.enemyChampionIds}
-            enemyTeamChampions={champSelect.enemyTeamChampions}
-          />
+          <div className="tab-switch">
+            <button
+              className={`tab-btn${champSelectTab === "suggestions" ? " active" : ""}`}
+              onClick={() => setChampSelectTab("suggestions")}
+            >
+              Suggestions
+            </button>
+            <button
+              className={`tab-btn${champSelectTab === "tierlist" ? " active" : ""}`}
+              onClick={() => setChampSelectTab("tierlist")}
+            >
+              Tier List
+            </button>
+          </div>
+          {champSelectTab === "suggestions" ? (
+            <ChampSelectAssist
+              myPosition={champSelect.myPosition}
+              myActionId={champSelect.myActionId}
+              myActionType={champSelect.myActionType}
+              myBanPending={champSelect.myBanPending}
+              bannedChampionIds={champSelect.bannedChampionIds}
+              myTeamChampionIds={champSelect.myTeamChampionIds}
+              enemyChampionIds={champSelect.enemyChampionIds}
+              enemyTeamChampions={champSelect.enemyTeamChampions}
+            />
+          ) : (
+            <TierList />
+          )}
         </>
       ) : (
         <>
