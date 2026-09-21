@@ -443,6 +443,15 @@ export default function ChampionLookup({
   // a stale closure from the render where it was scheduled.
   const loadRef = useRef<() => void>(() => {});
 
+  // Champ select fully resets `autoChampion` to undefined between games
+  // (back to lobby/queue) — without this, picking the same champion+position
+  // combo again in a later game this session would silently skip auto-apply
+  // forever, since `lastAutoKeyRef` otherwise never forgets a key for the
+  // life of the component.
+  useEffect(() => {
+    if (!autoChampion) lastAutoKeyRef.current = null;
+  }, [autoChampion]);
+
   useEffect(() => {
     if (!autoChampion) return;
     const key = `${autoChampion}|${autoPosition ?? ""}`;
